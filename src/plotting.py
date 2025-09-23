@@ -127,7 +127,10 @@ def generate_folium_map(data, mode='ellipse'):
 
     for i in range(len(data.latlons)):
         lat, lon = data.latlons[i]
-        label = f'''Cluster: {data.labels[i]} 
+        if data.labels is None:
+            label = f'Index: {data.idx[i]}'
+        else:
+            label = f'''Cluster: {data.labels[i]} 
         <br>Index: {data.idx[i]}'''
 
         folium.CircleMarker(
