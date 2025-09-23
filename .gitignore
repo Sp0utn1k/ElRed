@@ -1,0 +1,54 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Conda environment directory
+.conda/
+
+# Environment files
+.env
+.env.*
+
+# VS Code settings
+.vscode/
+
+# MacOS
+.DS_Store
+
+# Map outputs
+maps/*
+
+
+# Data files
+*.csv
+
+# GitHub config
+.github/
+
+# System files
+Thumbs.db
+
+# Python egg files
+*.egg-info/
+
+dist/
+build/
+.eggs/
+
+# Logs
+*.log
+
+# Test outputs
+htmlcov/
+.coverage
+
+# Misc
+*.bak
+*.tmp

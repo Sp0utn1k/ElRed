@@ -1,0 +1,19 @@
+# Environment setup for ElRed project
+# To recreate the environment, run:
+#   conda env create -p ./.conda -f environment.yml
+
+name: elred
+channels:
+  - defaults
+dependencies:
+  - python=3.13
+  - numpy
+  - scipy
+  - pyproj
+  - scikit-learn
+  - matplotlib
+  - ipykernel
+  - numba
+  - networkx
+  - pandas
+  - folium
