@@ -160,6 +160,10 @@ class XYData:
     def b(self) -> np.ndarray:
         """Alias for semi_minor axes."""
         return self.semi_minor
+    
+    @property
+    def r(self) -> np.ndarray:
+        return np.sqrt(self.a*self.b)
 
     @property
     def inv_covs(self) -> np.ndarray:
@@ -298,7 +302,6 @@ class XYData:
         self.init_cluster_params(K)
         self.compute_cluster_params()
 
-
     def compute_cluster_params(self):
         if self.labels is None:
             raise ValueError("No cluster labels set for this XYData object.")
@@ -310,3 +313,4 @@ class XYData:
             self.mu[label] = np.linalg.solve(sum_inv_cov, weighted_sum)     # mu = inv(sum_inv_cov) @ weighted_sum
             self.sigma[label] = np.linalg.inv(sum_inv_cov)                    # covariance of the estimate
             self.pi[label] = len(cluster) / len(self)
+            

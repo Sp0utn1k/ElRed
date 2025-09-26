@@ -8,7 +8,8 @@ class LatLonData:
                  timestamps: Optional[np.ndarray] = None,
                  metadata: Optional[dict] = None,
                  bbox_multiplier: float = 1.5,
-                 labels: Optional[np.ndarray] = None):
+                 labels: Optional[np.ndarray] = None,
+                 parent = None):
         assert len(latlons) == len(ellipses), "latlons and ellipses must have same length"
         self.latlons = latlons
         self.ellipses = ellipses
@@ -25,6 +26,8 @@ class LatLonData:
             arrays_to_check.append(self.timestamps)
         lengths = [len(arr) for arr in arrays_to_check]
         assert all(l == lengths[0] for l in lengths), "All arrays must have same length"
+        
+        self.parent = parent
     
     def __len__(self) -> int:
         return len(self.latlons)
@@ -38,7 +41,8 @@ class LatLonData:
             timestamps=self.timestamps[key] if self.timestamps is not None else None,
             metadata=self.metadata.copy(),
             bbox_multiplier=self.bbox_multiplier,
-            labels=self.labels[key] if self.labels is not None else None
+            labels=self.labels[key] if self.labels is not None else None,
+            parent = self.parent or self
         )
         # transfer cached arrays to subset
         obj._cache = {name: arr[key] for name, arr in self._cache.items()}
@@ -142,7 +146,6 @@ class LatLonData:
         th = np.radians(self.bearings)
         # EW component: a*sinθ, b*cosθ
         return np.sqrt((a * np.sin(th))**2 + (b * np.cos(th))**2)
-
 
     @property
     def bbox_min(self) -> np.ndarray:
