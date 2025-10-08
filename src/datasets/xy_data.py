@@ -38,7 +38,8 @@ class XYData:
                  sigma: Optional[np.ndarray] = None,
                  labels: Optional[np.ndarray] = None,
                  gamma: Optional[np.ndarray] = None,
-                 cell_size: Optional[float]=None):
+                 cell_size: Optional[float]=None,
+                 parent = None):
         """
         Initialize XYData with positions, covariance matrices, indices, projection (pyproj.Proj),
         optional timestamps, metadata, confidence level ellipse_alpha for ellipse,
@@ -71,6 +72,8 @@ class XYData:
             self._cache['phi'] = phi
             
         self.g = cell_size
+
+        self.parent = parent
 
         # if self.pos.ndim == 2:
         #     N = len(self.pos)
@@ -105,6 +108,7 @@ class XYData:
             sigma=self.sigma,
             cell_size=self.g,
             labels=self.labels[key_np] if self.labels is not None else None,
+            parent=self.parent or self
         )
         # transfer other cached arrays to subset
         for name, arr in self._cache.items():
@@ -375,18 +379,24 @@ class XYData:
         """
         Iterate over clusters, yielding XYData for each cluster.
         """
+        if self.labels is None:
+            raise ValueError("No cluster labels set for this XYData object.")
         unique_labels = np.unique(self.labels)
         for cid in unique_labels:
             yield cid, self.get_cluster(cid)
 
+    def compute_adjacency_matrix(self, threshold=1e-3, alpha=0.95, k=10) -> np.ndarray:
+        mahal = np.einsum('...i,...ij,...j->...', self.dx, self.inv_sum_cov, self.dx)
+        A = mahal / chi2.ppf(alpha, df=2)
+        A = A.clip(max=5)
+        A = 1 / (1 + np.exp(k * (A - 1)))
+        A[A<threshold] = 0
+        return A
+
     def compute_graph(self, alpha=.95, k=10, threshold=1e-3):
 	
-        mahal = np.einsum('...i,...ij,...j->...', self.dx, self.inv_sum_cov, self.dx)
-        mask = mahal / chi2.ppf(alpha, df=2)
-        mask = mask.clip(max=2)
-        mask = 1 / (1 + np.exp(k * (mask - 1)))
-        mask[mask<threshold] = 0
-        self._cache['G'] = nx.from_numpy_array(mask)
+        A = self.compute_adjacency_matrix(threshold=threshold, alpha=alpha, k=k)
+        self._cache['G'] = nx.from_numpy_array(A)
 
     def split_into_connected_components(self):
         components_idx = list(nx.connected_components(self.G))
@@ -523,6 +533,11 @@ class XYData:
         for d in xydata_list:
             if d.proj != proj:
                 raise ValueError("All XYData objects must have the same projection.")
+            
+        # If all sets have same parent, preserve it
+        parent = None
+        if all(d.parent == xydata_list[0].parent for d in xydata_list):
+            parent = xydata_list[0].parent
 
         pos = np.concatenate([d.pos for d in xydata_list], axis=0)
         covs = np.concatenate([d.covs for d in xydata_list], axis=0)
@@ -571,5 +586,6 @@ class XYData:
             semi_major=semi_major,
             semi_minor=semi_minor,
             phi=phi,
-            labels=labels
+            labels=labels,
+            parent=parent
         )

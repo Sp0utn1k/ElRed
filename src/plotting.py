@@ -82,7 +82,8 @@ def create_ellipse_points_vectorized(lat, lon, semi_major, semi_minor, bearing, 
 
 def generate_folium_map(data, mode='ellipse',
                         tiles='OpenStreetMap',
-                        ellipse_num_points=100):
+                        ellipse_num_points=100,
+                        ellipse_alpha=0.1):
     """
     Plot your data class with latlons (Nx2) and ellipses (Nx3) arrays.
     mode: 'ellipse' (default), 'bbox' to plot bounding boxes, or 'points' to plot only points.
@@ -111,8 +112,9 @@ def generate_folium_map(data, mode='ellipse',
                 locations=ellipse_pts,
                 color='blue',
                 weight=1,
+                opacity=ellipse_alpha,
                 fill=True,
-                fillOpacity=0.2,
+                fillOpacity=0,
                 interactive=False
             ).add_to(m)
     elif mode == 'bbox':
@@ -217,8 +219,7 @@ def plot_data(data,
     ax.set_ylabel('Y coordinate [km]')
     ax.grid()
 
-    # return svg plot
-    return plt
+    return fig, ax
 
 def get_colors(labels):
     """Generate distinct colors for each unique label."""

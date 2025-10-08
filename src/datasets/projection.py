@@ -112,6 +112,7 @@ def project_latlon_data(latlon_data: LatLonData, verbose: bool = False) -> XYDat
         metadata=latlon_data.metadata,
         semi_major=semi_major,
         semi_minor=semi_minor,
-        phi=phi
+        phi=phi,
+        parent=latlon_data.parent or latlon_data
     )
 
