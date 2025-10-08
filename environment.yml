@@ -17,3 +17,6 @@ dependencies:
   - networkx
   - pandas
   - folium
+  - pip
+  - pip:
+      - smallestenclosingcircle

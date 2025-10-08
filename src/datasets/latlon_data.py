@@ -48,6 +48,11 @@ class LatLonData:
         obj._cache = {name: arr[key] for name, arr in self._cache.items()}
         return obj
     
+    def get_by_index(self, indices: np.ndarray) -> 'LatLonData':
+        """Get subset by original indices."""
+        mask = np.isin(self.idx, indices)
+        return self[mask]
+    
     def split(self, subsets: List[np.ndarray]) -> Iterator['LatLonData']:
         """Split into multiple LatLonData objects"""
         for subset in subsets:

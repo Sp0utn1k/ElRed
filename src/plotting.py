@@ -2,6 +2,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 from pyproj import Geod
 import numba
+from matplotlib.collections import EllipseCollection
 
 from .utils import min_enclosing_cap
 
@@ -79,8 +80,11 @@ def create_ellipse_points_vectorized(lat, lon, semi_major, semi_minor, bearing, 
     # Stack lat, lon for each ellipse
     return np.stack((lats_result, lons_result), axis=2)  # (n_ellipses, num_points, 2)
 
-def generate_folium_map(data, mode='ellipse'):
-    """Plot your data class with latlons (Nx2) and ellipses (Nx3) arrays.
+def generate_folium_map(data, mode='ellipse',
+                        tiles='OpenStreetMap',
+                        ellipse_num_points=100):
+    """
+    Plot your data class with latlons (Nx2) and ellipses (Nx3) arrays.
     mode: 'ellipse' (default), 'bbox' to plot bounding boxes, or 'points' to plot only points.
     """
     if not FOLIUM_AVAILABLE:
@@ -90,13 +94,16 @@ def generate_folium_map(data, mode='ellipse'):
     zoom_start = 9 - int(np.log2(radius+1e-6))
     zoom_start = max(0, min(18, zoom_start))
 
-    m = folium.Map(location=[center[0], center[1]], zoom_start=zoom_start,
+    m = folium.Map(location=[center[0], center[1]], 
+                   tiles=tiles,
+                   zoom_start=zoom_start,
                    control_scale=True)  # adds a dynamic scale bar in km
 
     if mode == 'ellipse':
         # Use LatLonData properties for vectorized ellipse points creation
         ellipse_pts_all = create_ellipse_points_vectorized(
-            data.lats, data.lons, data.majors, data.minors, data.bearings
+            data.lats, data.lons, data.majors, data.minors, data.bearings,
+            num_points=ellipse_num_points
         )
         for i in range(len(data.latlons)):
             ellipse_pts = ellipse_pts_all[i]
@@ -161,42 +168,55 @@ def plot_data(data,
     phi = data.phi 
     labels = None if skip_labels else data.labels
     point_colors = get_colors(labels) if labels is not None else None
-    plt.figure(figsize=figsize)
+
+    fig, ax = plt.subplots(figsize=figsize)
+
     if show_ellipses and ellipses_alpha > 0:
-        for i in range(len(pos)):
-            c = 'blue' if point_colors is None else point_colors[i]
-            ellipse = plt.matplotlib.patches.Ellipse(
-                xy=pos[i],
-                width=2*major[i],
-                height=2*minor[i],
-                angle=np.degrees(phi[i]),   
-                edgecolor=c,
-                facecolor='none',
-                lw=0.5,
-                alpha=ellipses_alpha
-            )
-            plt.gca().add_patch(ellipse)
-    plt.scatter(pos[:, 0], pos[:, 1], 
-                s=1, 
-                color = 'red' if labels is None else point_colors,
-                label='Positions')
-    
+        # Prepare EllipseCollection parameters
+        widths = 2 * major
+        heights = 2 * minor
+        angles = np.degrees(phi)
+        offsets = pos
+
+        if point_colors is not None:
+            # EllipseCollection expects RGBA tuples for edgecolors
+            edgecolors = point_colors
+        else:
+            edgecolors = ['blue'] * len(pos)
+
+        ec = EllipseCollection(
+            widths, heights, angles,
+            units='xy',
+            offsets=offsets,
+            transOffset=ax.transData,
+            edgecolors=edgecolors,
+            facecolors='none',
+            linewidths=0.5,
+            alpha=ellipses_alpha
+        )
+        ax.add_collection(ec)
+
+    ax.scatter(pos[:, 0], pos[:, 1], 
+               s=1, 
+               color = 'red' if labels is None else point_colors,
+               label='Positions')
+
     if hasattr(data, 'mu') and data.mu is not None:
         cluster_colors = get_colors(np.arange(len(data.mu))) if point_colors is not None else None
-        plt.scatter(data.mu[:, 0]/1000, data.mu[:, 1]/1000, 
-                    s=50, 
-                    color='green' if cluster_colors is None else cluster_colors,
+        ax.scatter(data.mu[:, 0]/1000, data.mu[:, 1]/1000, 
+                   s=50, 
+                   color='green' if cluster_colors is None else cluster_colors,
                     edgecolors='black',
                     linewidths=1,
                     marker='o', 
                     label='Cluster Centers')
 
-    plt.axis('equal')
-    plt.title(f"Projected data ({len(data)} points)")
-    plt.xlabel('X coordinate [km]')
-    plt.ylabel('Y coordinate [km]')
-    plt.grid()
-    
+    ax.axis('equal')
+    ax.set_title(f"Projected data ({len(data)} points, {len(np.unique(data.labels)) if data.labels is not None else 0} labels)")
+    ax.set_xlabel('X coordinate [km]')
+    ax.set_ylabel('Y coordinate [km]')
+    ax.grid()
+
     # return svg plot
     return plt
 
