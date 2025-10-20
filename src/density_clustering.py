@@ -9,6 +9,7 @@ from skimage.feature import peak_local_max
 import smallestenclosingcircle
 
 from .datasets import XYData
+from .utils.matrices import norm_2d
 
 def density_clustering(data,
                         cell_size_multiplier=0.5,
@@ -60,13 +61,15 @@ def density_clustering(data,
     peaks = peak_local_max(blurred,
                            threshold_abs=peak_threshold,
                            min_distance=min_cells_between_peaks)
+    if verbose:
+        print(f'Found {len(peaks)} peak{"s"*(len(peaks)>1)}')
     
     # Remove peaks where counts is below threshold_count
     threshold_count = int(np.round(threshold_count))
-    peaks = [peak for peak in peaks if max_neighbor_count(counts, peak, window=min_cells_between_peaks) >= threshold_count]
+    peaks = np.array([peak for peak in peaks 
+                      if max_neighbor_count(counts, peak, window=min_cells_between_peaks) >= threshold_count])
 
-    peaks = np.array(sorted(peaks, key= lambda x: blurred[tuple(x)], reverse=True))
-    
+    # peaks = np.array(sorted(peaks, key= lambda x: blurred[tuple(x)], reverse=True))
 
     blob_threshold = blob_min_count_per_km2 * (data.g/1000)**2
     blob_patience = np.ceil(blob_patience_in_meters / data.g)
@@ -88,7 +91,7 @@ def density_clustering(data,
                             tol=outliers_subgroup_tol,
                             max_dist_alpha=outliers_alpha)
     
-    peaks_m = (peaks * data.g + np.array([data.x_min, data.y_min]))
+    peaks_m = peaks * data.g + np.array([data.x_min, data.y_min])[None,:]
     if verbose:
         print(f"Found {len(blobs)} blobs, {len(subsets)} subsets, {len(outliers)} outliers")
 
@@ -114,11 +117,11 @@ def process_outliers(data, blobs,
     blobs_centers_m = (blob_centers * data.g + np.array([data.x_min, data.y_min]))
     radii_m = radii * data.g
 
-    dists = np.linalg.norm(blobs_centers_m[:,None,:] - outliers.pos[None,:,:], axis=2)
+    dists = norm_2d(blobs_centers_m[:,None,:] - outliers.pos[None,:,:], axis=2)
     radii_expanded = radii_m[:,None] + max_dist
     mask = dists < radii_expanded
 
-    inv_covs = outliers.inv_covs
+    inv_covs = outliers.inv_covs.copy()
 
     dists = np.ones_like(mask, dtype=np.float64) * np.inf
 
@@ -242,11 +245,10 @@ def compute_blobs_min_circle(blobs):
     return np.array(blob_centers), np.array(radii)
 
 def compute_mask_close_blobs(blob_centers, radii, offset=0):
-    dists = np.linalg.norm(blob_centers[:,None,:] - blob_centers[None,:,:], axis=2)
+    dists = norm_2d(blob_centers[:,None,:] - blob_centers[None,:,:], axis=2)
     np.fill_diagonal(dists, np.inf)
     radii_sum = radii[:,None] + radii[None,:]
     return dists < (radii_sum+offset)
-
 
 @njit
 def find_blobs(blurred, threshold, peaks, tol=.05, patience=1, patience_tol=.05):
@@ -274,19 +276,13 @@ def find_blobs(blurred, threshold, peaks, tol=.05, patience=1, patience_tol=.05)
             q = q[1:]
             
             val = blurred[i, j]
-            if val/prev_val > (1+patience_tol):
+            if val/(prev_val+1e-10) > (1+patience_tol):
                 streak += 1
             else:
                 streak = 0
 
             if tol*val > peak_threshold:
-                peak_threshold = tol*val
-                # Remove element below new threshold
-                for idx in range(len(current_blob)-1, -1, -1):
-                    ii, jj = current_blob[idx]
-                    if blurred[ii, jj] < peak_threshold:
-                        current_blob.pop(idx)
-                        visited.discard((ii, jj))
+                continue
             
             current_blob.append([i, j])
             for di, dj in directions:

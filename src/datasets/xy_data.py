@@ -7,6 +7,14 @@ from sklearn.cluster import KMeans
 from numba import njit, types
 from numba.typed import Dict
 
+from ..utils.matrices import (
+    inverse_2x2_matrices,
+    determinant_2x2_matrices,
+    eigh_2x2_matrices,
+    solve_2x2_matrices,
+    mahalanobis_2x2_matrices
+)
+
 @njit
 def _assign_points_to_blobs_njit(ix: np.ndarray, iy: np.ndarray, coord_to_blob_id: Dict) -> np.ndarray:
     """
@@ -145,13 +153,25 @@ class XYData:
             yield self[np.array(list(subset))]
 
     def split_by_labels(self) -> Iterator['XYData']:
-        """Split into multiple XYData objects based on unique labels"""
+        """Split into multiple XYData objects based on unique labels, with cluster parameters adapted for each subset."""
         if self.labels is None:
             raise ValueError("No labels set.")
         unique_labels = np.unique(self.labels)
         for label in unique_labels:
             mask = (self.labels == label)
-            yield self[mask]
+            subset = self[mask]
+            # Adapt cluster parameters for this subset
+            subset.K = 1
+            if self.mu is not None:
+                subset.mu = np.array([self.mu[label]])
+            if self.sigma is not None:
+                subset.sigma = np.array([self.sigma[label]])
+            if self.pi is not None:
+                subset.pi = np.array([self.pi[label]])
+            if self.gamma is not None:
+                subset.gamma = np.array([self.gamma[mask]])  # gamma is per-point
+            subset.labels = np.zeros(len(subset), dtype=int)
+            yield subset
 
     def clear_cache(self) -> None:
         """Clear all cached projections."""
@@ -250,7 +270,7 @@ class XYData:
         """Inverses of covariance matrices, same shape as covs."""
         key = 'inv_covs'
         if key not in self._cache:
-            self._cache[key] = np.linalg.inv(self.covs)
+            self._cache[key] = inverse_2x2_matrices(self.covs)
         return self._cache[key]
 
     @property
@@ -260,7 +280,7 @@ class XYData:
         if key not in self._cache:
             # Use broadcasting: covs[:, None, :, :] + covs[None, :, :, :] gives NxNx2x2 sums
             sums = self.covs[:, None, :, :] + self.covs[None, :, :, :]
-            self._cache[key] = np.linalg.inv(sums)
+            self._cache[key] = inverse_2x2_matrices(sums)
         return self._cache[key]
 
     @property
@@ -268,7 +288,7 @@ class XYData:
         """Determinant of each covariance matrix, shape (N,)."""
         key = 'cov_det'
         if key not in self._cache:
-            self._cache[key] = np.linalg.det(self.covs)
+            self._cache[key] = determinant_2x2_matrices(self.covs)
         return self._cache[key]
     
     @property
@@ -300,7 +320,7 @@ class XYData:
         # chi-square factor for given confidence level
         c = chi2.ppf(self.ellipse_alpha, df=2)
         # eigen-decomposition: w[...,0] ≤ w[...,1]
-        w, v = np.linalg.eigh(self.covs)
+        w, v = eigh_2x2_matrices(self.covs)
         major = np.sqrt(w[:, 1] * c)
         minor = np.sqrt(w[:, 0] * c)
         # eigenvector for largest eigenvalue
@@ -351,18 +371,17 @@ class XYData:
         max_cells = max_memory // 8  # assuming float64 (8 bytes)
         # Calculate the aspect ratio of the bounding box
         aspect_ratio = x_range / y_range if y_range != 0 else 1.0
-        # Solve for cell size g given max_cells and aspect ratio
+        # Solve for cell size g given max_cells and aspect_ratio
         g = np.sqrt((x_range * y_range) / (max_cells * aspect_ratio))
         return g
 
-    def init_cluster_params(self, K: int) -> None:
+    def set_k(self, K: int, remove_existing: bool = True) -> None:
         """
-        Initialize cluster parameters: mu (Kx2), sigma (Kx2x2), pi (K)
+        Set the number of clusters K.
         """
+        if remove_existing:
+            self.reset_labels()
         self.K = K
-        self.mu = np.zeros((K, 2))
-        self.sigma = np.zeros((K, 2, 2))
-        self.pi = np.zeros(K)
 
     def get_cluster(self, cluster_id: int) -> 'XYData':
         """
@@ -386,7 +405,7 @@ class XYData:
             yield cid, self.get_cluster(cid)
 
     def compute_adjacency_matrix(self, threshold=1e-3, alpha=0.95, k=10) -> np.ndarray:
-        mahal = np.einsum('...i,...ij,...j->...', self.dx, self.inv_sum_cov, self.dx)
+        mahal = mahalanobis_2x2_matrices(self.inv_covs, self.dx)
         A = mahal / chi2.ppf(alpha, df=2)
         A = A.clip(max=5)
         A = 1 / (1 + np.exp(k * (A - 1)))
@@ -417,7 +436,7 @@ class XYData:
         # Ensure the graph is a single connected component
         if len(self) == 1:
             self.labels = np.array([0])
-            self.init_cluster_params(1)
+            self.set_k(1)
             self.compute_cluster_params()
             return
         if not nx.is_connected(self.G):
@@ -438,7 +457,7 @@ class XYData:
         kmeans = KMeans(n_clusters=K)
         kmeans.fit(vecs)
         self.labels = kmeans.labels_
-        self.init_cluster_params(K)
+        self.set_k(K)
         self.compute_cluster_params()
 
     def compute_cluster_params(self):
@@ -449,8 +468,8 @@ class XYData:
             sum_inv_cov = np.sum(cluster.inv_covs, axis=0)                     # shape (2, 2)
             # weighted sum: for each point, multiply inverse covariance with its position vector
             weighted_sum = np.sum(np.einsum('nij,nj->ni', cluster.inv_covs, cluster.pos), axis=0)  # shape (2,)
-            self.mu[label] = np.linalg.solve(sum_inv_cov, weighted_sum)     # mu = inv(sum_inv_cov) @ weighted_sum
-            self.sigma[label] = np.linalg.inv(sum_inv_cov)                    # covariance of the estimate
+            self.mu[label] = solve_2x2_matrices(sum_inv_cov[None], weighted_sum[None])[0]     # mu = inv(sum_inv_cov) @ weighted_sum
+            self.sigma[label] = inverse_2x2_matrices(sum_inv_cov[None])[0]     # covariance of the estimate
             self.pi[label] = len(cluster) / len(self)
             
     def compute_cell_size(self, k=.5):

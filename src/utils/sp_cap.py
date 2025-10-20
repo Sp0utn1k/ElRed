@@ -1,4 +1,5 @@
 import numpy as np
+from .matrices import norm_2d
 
 def latlon_to_unitvec(lat, lon):
     """
@@ -34,7 +35,7 @@ def _sph_min_enclosing_cap(U, eps=1e-12, maxiter=2000):
     """
     # initial center: normalized average
     c = U.sum(axis=0)
-    c /= np.linalg.norm(c)
+    c /= norm_2d(c)
     # initial worst‐angle
     cosines = angular_distances(c, U)
     idx = np.argmin(cosines)
@@ -52,14 +53,14 @@ def _sph_min_enclosing_cap(U, eps=1e-12, maxiter=2000):
         g = -u_w / denom
         # project gradient onto tangent plane at c
         g -= c * (c.dot(g))
-        ng = np.linalg.norm(g)
+        ng = norm_2d(g)
         if ng < 1e-16:
             break
         g /= ng
         # attempt an update: rotate c a small 'step' toward -g
         # on the sphere, that is c_new = c*cos(step) + g*sin(step)
         c_new = c * np.cos(step) + g * np.sin(step)
-        c_new /= np.linalg.norm(c_new)
+        c_new /= norm_2d(c_new)
         cos_new = angular_distances(c_new, U)
         loss_new = np.arccos(np.min(cos_new))
         if loss_new < loss:
@@ -104,4 +105,4 @@ def min_enclosing_cap(latlon):
     center_deg = np.rad2deg(np.array(center_rad))
     radius_deg = np.rad2deg(radius_rad)
     
-    return center_deg, radius_deg    
+    return center_deg, radius_deg

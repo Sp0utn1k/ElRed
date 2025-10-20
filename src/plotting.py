@@ -4,6 +4,9 @@ from pyproj import Geod
 import numba
 from matplotlib.collections import EllipseCollection
 
+import plotly
+import plotly.graph_objs as go
+
 from .utils import min_enclosing_cap
 
 try:
@@ -12,7 +15,7 @@ try:
 except Exception:
     FOLIUM_AVAILABLE = False
 
-@numba.njit(cache=True)
+@numba.njit()
 def adaptive_theta_sampling(a, b, num_points):
     """Return theta array of shape (len(a), num_points) for each ellipse defined by a, b."""
     n = len(a)
@@ -164,9 +167,9 @@ def plot_data(data,
               figsize=(10, 10),
               ellipses_alpha=0.2, 
               skip_labels=False):
-    pos = data.pos/1000
-    major = data.semi_major/1000
-    minor = data.semi_minor/1000
+    pos = data.pos
+    major = data.semi_major
+    minor = data.semi_minor
     phi = data.phi 
     labels = None if skip_labels else data.labels
     point_colors = get_colors(labels) if labels is not None else None
@@ -205,7 +208,7 @@ def plot_data(data,
 
     if hasattr(data, 'mu') and data.mu is not None:
         cluster_colors = get_colors(np.arange(len(data.mu))) if point_colors is not None else None
-        ax.scatter(data.mu[:, 0]/1000, data.mu[:, 1]/1000, 
+        ax.scatter(data.mu[:, 0], data.mu[:, 1], 
                    s=50, 
                    color='green' if cluster_colors is None else cluster_colors,
                     edgecolors='black',
@@ -215,11 +218,53 @@ def plot_data(data,
 
     ax.axis('equal')
     ax.set_title(f"Projected data ({len(data)} points, {len(np.unique(data.labels)) if data.labels is not None else 0} labels)")
-    ax.set_xlabel('X coordinate [km]')
-    ax.set_ylabel('Y coordinate [km]')
     ax.grid()
 
     return fig, ax
+
+def plot_with_plotly(dataset):
+
+    plotly.offline.init_notebook_mode()
+
+    # Main scatter: points colored by label
+    scatter_points = go.Scattergl(
+        x=dataset.x,
+        y=dataset.y,
+        mode='markers',
+        marker=dict(
+            color=dataset.labels,
+            colorscale='Viridis',
+            size=3,
+            line_width=0
+        )
+    )
+    scatter_centers = go.Scattergl()  # empty
+
+    if hasattr(dataset, 'mu') and dataset.mu is not None:
+        scatter_centers = go.Scattergl(
+            x=dataset.mu[:, 0],
+            y=dataset.mu[:, 1],
+            mode='markers',
+            marker=dict(
+                color=np.arange(len(dataset.mu)),
+                colorscale='Viridis',
+                size=14,
+                line=dict(width=2, color='black')
+            )
+        )
+
+    fig = go.Figure(data=[scatter_points, scatter_centers])
+    fig.update_layout(
+        dragmode='pan',
+        yaxis=dict(scaleanchor="x", scaleratio=1),
+        title="Clustered points and centers (equal axis scale)",
+        xaxis_title="X [meters]",
+        yaxis_title="Y [meters]",
+        width=900,
+        height=900,
+        showlegend=False
+    )
+    return fig
 
 def get_colors(labels):
     """Generate distinct colors for each unique label."""
