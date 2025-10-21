@@ -23,7 +23,7 @@ __pycache__/
 .DS_Store
 
 # Map outputs
-maps/*
+maps/
 
 
 # Data files

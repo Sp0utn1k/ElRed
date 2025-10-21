@@ -3,17 +3,14 @@ import numpy as np
 from pyproj import Geod
 import numba
 from matplotlib.collections import EllipseCollection
-
+import offline_folium
+import folium
 import plotly
 import plotly.graph_objs as go
 
+
 from .utils import min_enclosing_cap
 
-try:
-    import folium # type: ignore
-    FOLIUM_AVAILABLE = True
-except Exception:
-    FOLIUM_AVAILABLE = False
 
 @numba.njit()
 def adaptive_theta_sampling(a, b, num_points):
@@ -91,8 +88,7 @@ def generate_folium_map(data, mode='ellipse',
     Plot your data class with latlons (Nx2) and ellipses (Nx3) arrays.
     mode: 'ellipse' (default), 'bbox' to plot bounding boxes, or 'points' to plot only points.
     """
-    if not FOLIUM_AVAILABLE:
-        raise ImportError("Folium Unavailable")
+    # Folium is now imported unconditionally; if unavailable, ImportError will be raised at import time
     center, radius = min_enclosing_cap(data.latlons)
 
     zoom_start = 9 - int(np.log2(radius+1e-6))

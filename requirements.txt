@@ -4,7 +4,6 @@ numba
 scipy
 scikit-image
 smallestenclosingcircle
-networkx
 pyproj
 scikit-learn
 matplotlib

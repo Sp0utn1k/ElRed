@@ -11,12 +11,15 @@ dependencies:
   - scipy
   - pyproj
   - scikit-learn
+  - scikit-image
   - matplotlib
   - ipykernel
   - numba
-  - networkx
   - pandas
   - folium
   - pip
+  - plotly
+  - nbformat>4.2.0
   - pip:
       - smallestenclosingcircle
+      - offline_folium

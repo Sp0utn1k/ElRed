@@ -1,5 +1,4 @@
 import numpy as np
-import networkx as nx
 from typing import Optional, Iterator, List , Tuple
 from pyproj import Proj
 from scipy.stats import chi2
@@ -292,12 +291,6 @@ class XYData:
         return self._cache[key]
     
     @property
-    def G(self):
-        if 'G' not in self._cache:
-            self.compute_graph()
-        return self._cache['G']
-
-    @property
     def gauss_denom(self) -> np.ndarray:
         """2*pi*det(cov) for each covariance matrix, shape (N,). Not cached."""
         return 2 * np.pi * np.sqrt(self.cov_det)
@@ -411,54 +404,6 @@ class XYData:
         A = 1 / (1 + np.exp(k * (A - 1)))
         A[A<threshold] = 0
         return A
-
-    def compute_graph(self, alpha=.95, k=10, threshold=1e-3):
-	
-        A = self.compute_adjacency_matrix(threshold=threshold, alpha=alpha, k=k)
-        self._cache['G'] = nx.from_numpy_array(A)
-
-    def split_into_connected_components(self):
-        components_idx = list(nx.connected_components(self.G))
-        components_idx.sort(key=len, reverse=True)
-
-        # If labels already assigned, raise warning
-        if self.labels is not None:
-            Warning("Overwriting existing labels.")
-
-        # Create labels based on components_idx
-        self.labels = np.zeros(self.pos.shape[0], dtype=int)
-        for cid, component in enumerate(components_idx):
-            self.labels[list(component)] = cid
-
-        return list(self.split(components_idx))
-
-    def spectral_clustering(self):
-        # Ensure the graph is a single connected component
-        if len(self) == 1:
-            self.labels = np.array([0])
-            self.set_k(1)
-            self.compute_cluster_params()
-            return
-        if not nx.is_connected(self.G):
-            raise ValueError("Graph must be a single connected component for spectral clustering.")
-        
-        L = nx.normalized_laplacian_matrix(self.G).toarray()
-        vals, vecs = np.linalg.eigh(L)
-        vecs = vecs
-        eig_gaps = np.diff(vals)
-        sort_idx = np.argsort(eig_gaps)[::-1]
-        try:
-            vecs = vecs[:, :sort_idx[0]+1]
-        except IndexError:
-            print(vecs)
-            raise IndexError("Failed to select eigenvectors for clustering.")
-
-        K = sort_idx[0] + 1
-        kmeans = KMeans(n_clusters=K)
-        kmeans.fit(vecs)
-        self.labels = kmeans.labels_
-        self.set_k(K)
-        self.compute_cluster_params()
 
     def compute_cluster_params(self):
         if self.labels is None:
