@@ -2,15 +2,22 @@ import numpy as np
 from typing import Optional, Iterator, Union, List
 import warnings
 
+
 class LatLonData:
-    def __init__(self, latlons: np.ndarray, ellipses: np.ndarray, 
-                 idx: Optional[np.ndarray] = None, 
-                 timestamps: Optional[np.ndarray] = None,
-                 metadata: Optional[dict] = None,
-                 bbox_multiplier: float = 1.5,
-                 labels: Optional[np.ndarray] = None,
-                 parent = None):
-        assert len(latlons) == len(ellipses), "latlons and ellipses must have same length"
+    def __init__(
+        self,
+        latlons: np.ndarray,
+        ellipses: np.ndarray,
+        idx: Optional[np.ndarray] = None,
+        timestamps: Optional[np.ndarray] = None,
+        metadata: Optional[dict] = None,
+        bbox_multiplier: float = 1.5,
+        labels: Optional[np.ndarray] = None,
+        parent=None,
+    ):
+        assert len(latlons) == len(
+            ellipses
+        ), "latlons and ellipses must have same length"
         self.latlons = latlons
         self.ellipses = ellipses
         self.idx = idx if idx is not None else np.arange(len(latlons))
@@ -26,13 +33,13 @@ class LatLonData:
             arrays_to_check.append(self.timestamps)
         lengths = [len(arr) for arr in arrays_to_check]
         assert all(l == lengths[0] for l in lengths), "All arrays must have same length"
-        
+
         self.parent = parent
-    
+
     def __len__(self) -> int:
         return len(self.latlons)
-    
-    def __getitem__(self, key: Union[slice, np.ndarray, List[int]]) -> 'LatLonData':
+
+    def __getitem__(self, key: Union[slice, np.ndarray, List[int]]) -> "LatLonData":
         """Enable indexing/slicing: data[mask] or data[0:10]"""
         obj = LatLonData(
             latlons=self.latlons[key],
@@ -42,27 +49,27 @@ class LatLonData:
             metadata=self.metadata.copy(),
             bbox_multiplier=self.bbox_multiplier,
             labels=self.labels[key] if self.labels is not None else None,
-            parent = self.parent or self
+            parent=self.parent or self,
         )
         # transfer cached arrays to subset
         obj._cache = {name: arr[key] for name, arr in self._cache.items()}
         return obj
-    
-    def get_by_index(self, indices: np.ndarray) -> 'LatLonData':
+
+    def get_by_index(self, indices: np.ndarray) -> "LatLonData":
         """Get subset by original indices."""
         mask = np.isin(self.idx, indices)
         return self[mask]
-    
-    def split(self, subsets: List[np.ndarray]) -> Iterator['LatLonData']:
+
+    def split(self, subsets: List[np.ndarray]) -> Iterator["LatLonData"]:
         """Split into multiple LatLonData objects"""
         for subset in subsets:
             yield self[subset]
-    
+
     @property
     def is_empty(self) -> bool:
         return len(self) == 0
-    
-    def copy(self) -> 'LatLonData':
+
+    def copy(self) -> "LatLonData":
         """Create a deep copy"""
         obj = LatLonData(
             latlons=self.latlons.copy(),
@@ -71,24 +78,24 @@ class LatLonData:
             timestamps=self.timestamps.copy() if self.timestamps is not None else None,
             metadata=self.metadata.copy(),
             bbox_multiplier=self.bbox_multiplier,
-            labels=self.labels.copy()
+            labels=self.labels.copy(),
         )
         # preserve any already-computed cache entries
         obj._cache = self._cache.copy()
         return obj
-    
+
     def get_bounds(self) -> dict:
         """Get lat/lon bounds - useful for projection decisions"""
         return {
-            'lat_min': self.lats.min(),
-            'lat_max': self.lats.max(),
-            'lon_min': self.lons.min(),
-            'lon_max': self.lons.max()
+            "lat_min": self.lats.min(),
+            "lat_max": self.lats.max(),
+            "lon_min": self.lons.min(),
+            "lon_max": self.lons.max(),
         }
-        
+
     def df_subset(self, df):
         return df.iloc[self.idx]
-    
+
     @property
     def lats(self) -> np.ndarray:
         """Return array of latitudes."""
@@ -125,16 +132,16 @@ class LatLonData:
     @property
     def proj_ns(self) -> np.ndarray:
         """Projected ellipse lengths along North-South axis."""
-        if 'proj_ns' not in self._cache:
-            self._cache['proj_ns'] = self._compute_proj_ns()
-        return self._cache['proj_ns']
+        if "proj_ns" not in self._cache:
+            self._cache["proj_ns"] = self._compute_proj_ns()
+        return self._cache["proj_ns"]
 
     @property
     def proj_ew(self) -> np.ndarray:
         """Projected ellipse lengths along East-West axis."""
-        if 'proj_ew' not in self._cache:
-            self._cache['proj_ew'] = self._compute_proj_ew()
-        return self._cache['proj_ew']
+        if "proj_ew" not in self._cache:
+            self._cache["proj_ew"] = self._compute_proj_ew()
+        return self._cache["proj_ew"]
 
     def _compute_proj_ns(self) -> np.ndarray:
         """Correct NS half-extent (support function) for a rotated ellipse."""
@@ -142,7 +149,7 @@ class LatLonData:
         b = self.minors  # 95% semi-minor in meters
         th = np.radians(self.bearings)  # bearings: deg, clockwise from North
         # NS component: a*cosθ, b*sinθ
-        return np.sqrt((a * np.cos(th))**2 + (b * np.sin(th))**2)
+        return np.sqrt((a * np.cos(th)) ** 2 + (b * np.sin(th)) ** 2)
 
     def _compute_proj_ew(self) -> np.ndarray:
         """Correct EW half-extent (support function) for a rotated ellipse."""
@@ -150,12 +157,12 @@ class LatLonData:
         b = self.minors
         th = np.radians(self.bearings)
         # EW component: a*sinθ, b*cosθ
-        return np.sqrt((a * np.sin(th))**2 + (b * np.cos(th))**2)
+        return np.sqrt((a * np.sin(th)) ** 2 + (b * np.cos(th)) ** 2)
 
     @property
     def bbox_min(self) -> np.ndarray:
         """Return array of minimum [lat, lon] for each point’s bounding box."""
-        cache_key = f'bbox_min_{self.bbox_multiplier}'
+        cache_key = f"bbox_min_{self.bbox_multiplier}"
         if cache_key not in self._cache:
             self._cache[cache_key] = self._compute_bbox_min()
         return self._cache[cache_key]
@@ -163,7 +170,7 @@ class LatLonData:
     @property
     def bbox_max(self) -> np.ndarray:
         """Return array of maximum [lat, lon] for each point’s bounding box."""
-        cache_key = f'bbox_max_{self.bbox_multiplier}'
+        cache_key = f"bbox_max_{self.bbox_multiplier}"
         if cache_key not in self._cache:
             self._cache[cache_key] = self._compute_bbox_max()
         return self._cache[cache_key]
@@ -177,7 +184,6 @@ class LatLonData:
         meters_per_deg_lon = meters_per_deg_lat * coslat
         deg_lon = ew / meters_per_deg_lon
         return deg_lat, deg_lon
-
 
     def _compute_bbox_min(self) -> np.ndarray:
         lat = self.lats
@@ -193,7 +199,9 @@ class LatLonData:
         lat_min = np.clip(lat_min, -90, 90)
         # Raise warning if longitude crosses the -180°/180° meridian
         if np.any(np.abs(lon_min) > 180):
-            warnings.warn("Bounding box longitude minimum crosses the -180°/180° meridian.")
+            warnings.warn(
+                "Bounding box longitude minimum crosses the -180°/180° meridian."
+            )
         return np.column_stack((lat_min, lon_min))
 
     def _compute_bbox_max(self) -> np.ndarray:
@@ -210,5 +218,7 @@ class LatLonData:
         lat_max = np.clip(lat_max, -90, 90)
         # Raise warning if longitude crosses the -180°/180° meridian
         if np.any(np.abs(lon_max) > 180):
-            warnings.warn("Bounding box longitude maximum crosses the -180°/180° meridian.")
+            warnings.warn(
+                "Bounding box longitude maximum crosses the -180°/180° meridian."
+            )
         return np.column_stack((lat_max, lon_max))

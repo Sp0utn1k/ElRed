@@ -8,15 +8,16 @@ import numpy as np
 
 EPS = 1e-12
 
+
 def determinant_2x2_matrices(m):
     """
     Compute determinants of 2x2 matrices.
-    
+
     Parameters
     ----------
     m : ndarray, shape (..., 2, 2)
         Input matrices with arbitrary leading dimensions.
-        
+
     Returns
     -------
     ndarray, shape (...)
@@ -27,14 +28,16 @@ def determinant_2x2_matrices(m):
     det = m_flat[:, 0, 0] * m_flat[:, 1, 1] - m_flat[:, 0, 1] * m_flat[:, 1, 0]
     return det.reshape(original_shape)
 
+
 def det_safe(det, EPS=EPS):
     sign = np.where(det >= 0, 1, -1)
     return np.where(np.abs(det) < EPS, EPS * sign, det)
 
+
 def inverse_2x2_matrices(matrices, safe=False, EPS=EPS):
     """
     Compute inverses of 2x2 matrices.
-    
+
     Parameters
     ----------
     matrices : ndarray, shape (..., 2, 2)
@@ -43,7 +46,7 @@ def inverse_2x2_matrices(matrices, safe=False, EPS=EPS):
         If True, safeguard against near-zero determinants.
     EPS : float, optional
         Epsilon value for safe mode.
-        
+
     Returns
     -------
     ndarray, shape (..., 2, 2)
@@ -51,7 +54,7 @@ def inverse_2x2_matrices(matrices, safe=False, EPS=EPS):
     """
     original_shape = matrices.shape
     matrices_flat = matrices.reshape(-1, 2, 2)
-    
+
     det = determinant_2x2_matrices(matrices_flat)
 
     if safe:
@@ -65,10 +68,11 @@ def inverse_2x2_matrices(matrices, safe=False, EPS=EPS):
 
     return inv_matrices.reshape(original_shape)
 
+
 def mahalanobis_2x2_matrices(matrices, diffs, is_inverse=True, squared=True):
     """
     Compute Mahalanobis distances for multiple 2D vectors and 2x2 matrices.
-    
+
     Parameters
     ----------
     matrices : ndarray, shape (..., 2, 2)
@@ -94,8 +98,14 @@ def mahalanobis_2x2_matrices(matrices, diffs, is_inverse=True, squared=True):
     inv_matrices_flat = inv_matrices.reshape(-1, 2, 2)
 
     # Compute Mahalanobis distances using quadratic 2x2 form
-    Av_0 = inv_matrices_flat[:, 0, 0] * diffs_flat[:, 0] + inv_matrices_flat[:, 0, 1] * diffs_flat[:, 1]
-    Av_1 = inv_matrices_flat[:, 1, 0] * diffs_flat[:, 0] + inv_matrices_flat[:, 1, 1] * diffs_flat[:, 1]
+    Av_0 = (
+        inv_matrices_flat[:, 0, 0] * diffs_flat[:, 0]
+        + inv_matrices_flat[:, 0, 1] * diffs_flat[:, 1]
+    )
+    Av_1 = (
+        inv_matrices_flat[:, 1, 0] * diffs_flat[:, 0]
+        + inv_matrices_flat[:, 1, 1] * diffs_flat[:, 1]
+    )
 
     mahalanobis_sq = diffs_flat[:, 0] * Av_0 + diffs_flat[:, 1] * Av_1
     if not squared:
@@ -103,17 +113,18 @@ def mahalanobis_2x2_matrices(matrices, diffs, is_inverse=True, squared=True):
         mahalanobis_sq = np.sqrt(mahalanobis_sq)
     return mahalanobis_sq.reshape(original_shape)
 
+
 def eigh_2x2_matrices(matrices, EPS=1e-12):
     """
     Vectorized eigendecomposition for 2x2 symmetric matrices.
-    
+
     Parameters
     ----------
     matrices : ndarray, shape (..., 2, 2)
         Symmetric matrices with arbitrary leading dimensions.
     EPS : float, optional
         Epsilon for numerical stability.
-        
+
     Returns
     -------
     w : ndarray, shape (..., 2)
@@ -128,37 +139,37 @@ def eigh_2x2_matrices(matrices, EPS=1e-12):
     # Check symmetry:
     if not np.allclose(matrices_flat[:, 0, 1], matrices_flat[:, 1, 0]):
         raise ValueError("Input matrices must be symmetric.")
-    
+
     a = matrices_flat[:, 0, 0]
     b = matrices_flat[:, 0, 1]  # Assume symmetric: b == c
     d = matrices_flat[:, 1, 1]
-    
+
     trace = a + d
     det = a * d - b * b
     discriminant = np.maximum(trace**2 - 4 * det, 0)
     sqrt_disc = np.sqrt(discriminant)
-    
+
     # Eigenvalues
     w = np.empty((n, 2), dtype=matrices_flat.dtype)
     w[:, 0] = (trace - sqrt_disc) / 2  # Smaller first
     w[:, 1] = (trace + sqrt_disc) / 2  # Larger second
-    
+
     # Eigenvectors (vectorized)
     v = np.zeros((n, 2, 2), dtype=matrices_flat.dtype)
-    
+
     # Use b as denominator when non-zero
     use_b = np.abs(b) > EPS
-    
+
     # v1 for λ1
     v[use_b, 0, 0] = b[use_b]
     v[use_b, 1, 0] = w[use_b, 0] - a[use_b]
     v[~use_b, 0, 0] = 1.0  # Diagonal case
-    
+
     # v2 for λ2
     v[use_b, 0, 1] = b[use_b]
     v[use_b, 1, 1] = w[use_b, 1] - a[use_b]
     v[~use_b, 1, 1] = 1.0  # Diagonal case
-    
+
     # Normalize
     norms = np.sqrt(np.sum(v**2, axis=1, keepdims=True))
     v /= norms + 1e-20  # Avoid division by zero
@@ -167,22 +178,23 @@ def eigh_2x2_matrices(matrices, EPS=1e-12):
     for i in range(2):
         first_elem = v[:, 0, i]
         second_elem = v[:, 1, i]
-        
+
         # Case 1: First element is significantly non-zero and negative
         flip_first = (np.abs(first_elem) > EPS) & (first_elem < 0)
         v[flip_first, :, i] *= -1
-        
+
         # Case 2: First element near zero, make second element positive
         first_near_zero = np.abs(first_elem) <= EPS
         flip_second = first_near_zero & (second_elem < 0)
         v[flip_second, :, i] *= -1
-    
+
     return w.reshape(original_shape + (2,)), v.reshape(original_shape + (2, 2))
+
 
 def solve_2x2_matrices(A, b, safe=False, EPS=1e-12):
     """
     Solve Ax = b for multiple 2x2 matrices A and vectors b.
-    
+
     Parameters
     ----------
     A : ndarray, shape (..., 2, 2)
@@ -193,7 +205,7 @@ def solve_2x2_matrices(A, b, safe=False, EPS=1e-12):
         If True, safeguard against near-zero determinants.
     EPS : float, optional
         Epsilon value for safe mode.
-        
+
     Returns
     -------
     ndarray, shape (..., 2)
@@ -202,7 +214,7 @@ def solve_2x2_matrices(A, b, safe=False, EPS=1e-12):
     original_shape = A.shape[:-2]
     A_flat = A.reshape(-1, 2, 2)
     b_flat = b.reshape(-1, 2)
-    
+
     det = determinant_2x2_matrices(A_flat)
     if safe:
         det = det_safe(det, EPS=EPS)
@@ -212,6 +224,7 @@ def solve_2x2_matrices(A, b, safe=False, EPS=1e-12):
     x[:, 0] = (A_flat[:, 1, 1] * b_flat[:, 0] - A_flat[:, 0, 1] * b_flat[:, 1]) / det
     x[:, 1] = (A_flat[:, 0, 0] * b_flat[:, 1] - A_flat[:, 1, 0] * b_flat[:, 0]) / det
     return x.reshape(original_shape + (2,))
+
 
 def norm_2d(vectors, axis=-1):
     """
@@ -225,14 +238,14 @@ if __name__ == "__main__":
     # Benchmarking numpy vs 2x2 functions
 
     import time
-    
+
     N = 10_000_000
     array_dtype = np.float32
     ms_precision = 2  # Number of decimal places for ms output
 
     # print settings (N, dtype) and a nice header
     sep = "-" * 20
-    print(f'{sep} Start of 2x2 matrix operations benchmark {sep}')
+    print(f"{sep} Start of 2x2 matrix operations benchmark {sep}")
     print(f"Number of matrices: {N}")
     print(f"Data type: {array_dtype}")
 
@@ -373,7 +386,7 @@ if __name__ == "__main__":
     t0 = time.perf_counter()
     x1 = solve_2x2_matrices(A, b)
     t1 = time.perf_counter()
-    x2 = np.linalg.solve(A, b[:,:, None])[:, :, 0]
+    x2 = np.linalg.solve(A, b[:, :, None])[:, :, 0]
     t2 = time.perf_counter()
 
     # Dtype check
@@ -432,43 +445,43 @@ if __name__ == "__main__":
     print("\n" + "=" * 70)
     print("Testing with arbitrary leading dimensions")
     print("=" * 70)
-    
+
     # Test with shape (3, 4, 2, 2) - simulating a 3x4 grid of 2x2 matrices
     test_matrices = np.random.rand(3, 4, 2, 2).astype(np.float32)
-    test_matrices = test_matrices + np.transpose(test_matrices, (0, 1, 3, 2))  # Make symmetric
-    
+    test_matrices = test_matrices + np.transpose(
+        test_matrices, (0, 1, 3, 2)
+    )  # Make symmetric
+
     print(f"Test matrices shape: {test_matrices.shape}")
-    
+
     # Test determinant
     det = determinant_2x2_matrices(test_matrices)
     print(f"Determinant output shape: {det.shape} (expected: (3, 4))")
     assert det.shape == (3, 4), f"Expected shape (3, 4), got {det.shape}"
-    
+
     # Test inverse
     inv = inverse_2x2_matrices(test_matrices)
     print(f"Inverse output shape: {inv.shape} (expected: (3, 4, 2, 2))")
     assert inv.shape == (3, 4, 2, 2), f"Expected shape (3, 4, 2, 2), got {inv.shape}"
-    
+
     # Test eigh
     w, v = eigh_2x2_matrices(test_matrices)
     print(f"Eigenvalues shape: {w.shape} (expected: (3, 4, 2))")
     print(f"Eigenvectors shape: {v.shape} (expected: (3, 4, 2, 2))")
     assert w.shape == (3, 4, 2), f"Expected shape (3, 4, 2), got {w.shape}"
     assert v.shape == (3, 4, 2, 2), f"Expected shape (3, 4, 2, 2), got {v.shape}"
-    
+
     # Test solve
     test_b = np.random.rand(3, 4, 2).astype(np.float32)
     x = solve_2x2_matrices(test_matrices, test_b)
     print(f"Solve output shape: {x.shape} (expected: (3, 4, 2))")
     assert x.shape == (3, 4, 2), f"Expected shape (3, 4, 2), got {x.shape}"
-    
+
     # Test with single matrix (0D leading dimensions)
     single_matrix = np.random.rand(2, 2).astype(np.float32)
     single_matrix = single_matrix + single_matrix.T
     det_single = determinant_2x2_matrices(single_matrix)
     print(f"Single matrix determinant shape: {det_single.shape} (expected: ())")
     assert det_single.shape == (), f"Expected shape (), got {det_single.shape}"
-    
+
     print("\n✓ All shape tests passed!")
-
-

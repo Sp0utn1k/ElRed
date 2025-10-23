@@ -1,15 +1,15 @@
 import numpy as np
 from .matrices import norm_2d
 
+
 def latlon_to_unitvec(lat, lon):
     """
     Convert latitude and longitude (in radians) to 3D unit vectors.
     lat, lon can be scalars or 1D arrays of the same shape.
     """
     clat = np.cos(lat)
-    return np.vstack((clat * np.cos(lon),
-                      clat * np.sin(lon),
-                      np.sin(lat))).T
+    return np.vstack((clat * np.cos(lon), clat * np.sin(lon), np.sin(lat))).T
+
 
 def unitvec_to_latlon(u):
     """
@@ -20,6 +20,7 @@ def unitvec_to_latlon(u):
     lon = np.arctan2(u[..., 1], u[..., 0])
     return lat, lon
 
+
 def angular_distances(c, U):
     """
     Cosines of angles between center c and all unit vectors U (N×3).
@@ -27,6 +28,7 @@ def angular_distances(c, U):
     """
     cosines = U.dot(c)
     return np.clip(cosines, -1.0, 1.0)
+
 
 def _sph_min_enclosing_cap(U, eps=1e-12, maxiter=2000):
     """
@@ -76,14 +78,15 @@ def _sph_min_enclosing_cap(U, eps=1e-12, maxiter=2000):
     r = np.arccos(final_cos)
     return c, r
 
+
 def min_enclosing_cap(latlon):
     """
     Find the minimal enclosing spherical cap for given lat/lon points.
-    
+
     Parameters:
     latlon : array-like, shape (N, 2)
         Array of [latitude, longitude] pairs in degrees
-    
+
     Returns:
     center : numpy array, shape (2,)
         [latitude, longitude] of cap center in degrees
@@ -91,7 +94,7 @@ def min_enclosing_cap(latlon):
         Radius of cap in degrees
     """
     lats, lons = latlon.T
-    
+
     # Convert input from degrees to radians
     lats_rad = np.deg2rad(lats)
     lons_rad = np.deg2rad(lons)
@@ -100,9 +103,9 @@ def min_enclosing_cap(latlon):
 
     c3, radius_rad = _sph_min_enclosing_cap(U)
     center_rad = unitvec_to_latlon(c3)
-    
+
     # Convert output from radians to degrees
     center_deg = np.rad2deg(np.array(center_rad))
     radius_deg = np.rad2deg(radius_rad)
-    
+
     return center_deg, radius_deg
