@@ -1,9 +1,10 @@
+
 from matplotlib import pyplot as plt
+from matplotlib.collections import EllipseCollection
 import numpy as np
 from pyproj import Geod
 import numba
-from matplotlib.collections import EllipseCollection
-import offline_folium
+from offline_folium import offline
 import folium
 import plotly
 import plotly.graph_objs as go
