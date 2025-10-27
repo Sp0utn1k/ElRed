@@ -14,6 +14,11 @@ import plotly.graph_objs as go
 
 from .utils import min_enclosing_cap
 
+CUSTOM_TILES_ADDRESSES = {
+    "osm": "http://[::1]:8080/styles/osm-bright/512/{z}/{x}/{y}.png"
+}
+
+
 @numba.njit()
 def adaptive_theta_sampling(a, b, num_points):
     """Return theta array of shape (len(a), num_points) for each ellipse defined by a, b.
@@ -118,7 +123,7 @@ def create_ellipse_points_vectorized(
 def generate_folium_map(
     data,
     mode="ellipse",
-    tiles="OpenStreetMap",
+    tiles="osm",
     ellipse_num_points=100,
     ellipse_alpha=0.1,
 ):
@@ -126,9 +131,10 @@ def generate_folium_map(
 
     Args:
         data: Data object containing lat/lon, ellipses, and labels.
-        mode (str, optional): Visualization mode ('ellipse', 'bbox', or 'points'). Defaults to 'ellipse'.
-        tiles (str, optional): Tile style for the map. Defaults to 'OpenStreetMap'.
-        ellipse_num_points (int, optional): Number of points to sample for ellipses. Defaults to 100.
+        mode (str, optional): Visualization mode ('ellipse', 'bbox', or 'points').
+            Defaults to 'ellipse'.
+        tiles (str, optional): Tiles style. Defaults to 'osm' (offline tileserver).
+        ellipse_num_points (int, optional): Number of points for ellipses polygon. Defaults to 100.
         ellipse_alpha (float, optional): Transparency level for ellipses. Defaults to 0.1.
 
     Returns:
@@ -139,12 +145,27 @@ def generate_folium_map(
     zoom_start = 9 - int(np.log2(radius + 1e-6))
     zoom_start = max(0, min(18, zoom_start))
 
+    tiles_url = None
+    for url in CUSTOM_TILES_ADDRESSES.keys():
+        if tiles == url:
+            tiles_url = url
+            tiles = None
+
     m = folium.Map(
         location=[center[0], center[1]],
         tiles=tiles,
         zoom_start=zoom_start,
         control_scale=True,
     )  # adds a dynamic scale bar in km
+
+    if tiles_url is not None:
+        folium.TileLayer(
+            tiles=tiles_url,
+            attr="Local Tiles Server",
+            name="Local Tiles",
+            overlay=False,
+            control=True,
+        ).add_to(m)
 
     if mode == "ellipse":
         # Use LatLonData properties for vectorized ellipse points creation
